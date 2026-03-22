@@ -8,8 +8,6 @@ surface report.pdf
 
 A thumbnail appears in the corner of your screen. Drag it wherever you need it. The window closes automatically after a successful drag. You can also double-click to open the file directly.
 
-![surface screenshot](assets/screenshot.png)
-
 ## Install
 
 ```
