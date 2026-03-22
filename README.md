@@ -1,6 +1,14 @@
 # surface
 
-Float a draggable file thumbnail on your screen. Double-click to open the file, or drag it into any app. The window closes automatically after a successful drag.
+A bridge between your terminal and your desktop. When you're working in the terminal and need to quickly get a file into a GUI app — drag it into a browser upload, drop it in Slack, attach it to an email — `surface` floats a small draggable thumbnail on your screen so you don't have to go hunting through Finder.
+
+```
+surface report.pdf
+```
+
+A thumbnail appears in the corner of your screen. Drag it wherever you need it. The window closes automatically after a successful drag. You can also double-click to open the file directly.
+
+![surface screenshot](assets/screenshot.png)
 
 ## Install
 
