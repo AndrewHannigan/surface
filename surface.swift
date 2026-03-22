@@ -122,6 +122,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         super.init()
     }
 
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        return true
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         let thumbSize: CGFloat = 160
         let labelHeight: CGFloat = 24
