@@ -39,6 +39,10 @@ Or build for the current architecture only:
 swiftc -O -o surface -framework Cocoa -framework QuickLookThumbnailing surface.swift
 ```
 
+## Versioning
+
+All releases use patch versions only: `v0.1.0`, `v0.1.1`, `v0.1.2`, etc.
+
 ## Deploying
 
 1. Commit and tag a new version:
@@ -46,21 +50,21 @@ swiftc -O -o surface -framework Cocoa -framework QuickLookThumbnailing surface.s
    ```bash
    git add surface.swift
    git commit -m "Description of changes"
-   git tag vX.Y.Z
-   git push origin main vX.Y.Z
+   git tag v0.1.X
+   git push origin main v0.1.X
    ```
 
 2. Build the universal binary (see above) and create a GitHub release:
 
    ```bash
-   gh release create vX.Y.Z --title "vX.Y.Z" --notes "Release notes"
-   gh release upload vX.Y.Z surface
+   gh release create v0.1.X --title "v0.1.X" --notes "Release notes"
+   gh release upload v0.1.X surface
    ```
 
 3. Get the SHA256 of the uploaded binary:
 
    ```bash
-   curl -sL https://github.com/AndrewHannigan/surface/releases/download/vX.Y.Z/surface | shasum -a 256
+   curl -sL https://github.com/AndrewHannigan/surface/releases/download/v0.1.X/surface | shasum -a 256
    ```
 
 4. Update the formula in [homebrew-tap](https://github.com/AndrewHannigan/homebrew-tap) — set the new version, URL tag, and SHA256 in `Formula/surface.rb`, then commit and push.

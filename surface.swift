@@ -213,7 +213,7 @@ if CommandLine.arguments.contains("--foreground") {
     app.run()
 } else {
     // Re-launch ourselves in the background with --foreground
-    let execPath = CommandLine.arguments[0]
+    let execPath = Bundle.main.executablePath ?? CommandLine.arguments[0]
     let args = ["surface", url.path, "--foreground"]
     var cArgs = args.map { strdup($0) } + [nil]
     var pid: pid_t = 0
