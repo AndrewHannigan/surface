@@ -204,8 +204,24 @@ guard FileManager.default.fileExists(atPath: url.path) else {
     exit(1)
 }
 
-let app = NSApplication.shared
-app.setActivationPolicy(.accessory)
-let delegate = AppDelegate(fileURL: url)
-app.delegate = delegate
-app.run()
+// If launched with --foreground, run the app directly
+if CommandLine.arguments.contains("--foreground") {
+    let app = NSApplication.shared
+    app.setActivationPolicy(.accessory)
+    let delegate = AppDelegate(fileURL: url)
+    app.delegate = delegate
+    app.run()
+} else {
+    // Re-launch ourselves in the background with --foreground
+    let execPath = CommandLine.arguments[0]
+    let args = ["surface", url.path, "--foreground"]
+    var cArgs = args.map { strdup($0) } + [nil]
+    var pid: pid_t = 0
+    let status = posix_spawn(&pid, execPath, nil, nil, &cArgs, nil)
+    cArgs.compactMap { $0 }.forEach { free($0) }
+    if status != 0 {
+        fputs("Failed to launch background process\n", stderr)
+        exit(1)
+    }
+    exit(0)
+}
