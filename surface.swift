@@ -111,14 +111,58 @@ class FilenameLabel: NSTextField {
     required init?(coder: NSCoder) { fatalError() }
 }
 
+// MARK: - Instance Stacking
+
+/// Coordinates window positions across multiple surface instances using PID files in /tmp.
+class InstanceStack {
+    static let stackDir = "/tmp/surface-stack"
+    private let pidFile: String
+
+    init() {
+        let dir = InstanceStack.stackDir
+        try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+        pidFile = "\(dir)/\(ProcessInfo.processInfo.processIdentifier)"
+    }
+
+    /// Returns the stack index (0-based) for this instance after cleaning up stale entries.
+    func claim() -> Int {
+        let fm = FileManager.default
+        let dir = InstanceStack.stackDir
+
+        // Clean up stale PID files from dead processes
+        let entries = (try? fm.contentsOfDirectory(atPath: dir)) ?? []
+        var liveCount = 0
+        for entry in entries {
+            if let pid = Int32(entry), kill(pid, 0) != 0 {
+                try? fm.removeItem(atPath: "\(dir)/\(entry)")
+            } else {
+                liveCount += 1
+            }
+        }
+
+        // Register this instance
+        fm.createFile(atPath: pidFile, contents: nil)
+
+        return liveCount
+    }
+
+    func release() {
+        try? FileManager.default.removeItem(atPath: pidFile)
+    }
+}
+
 // MARK: - Window Setup
 
 class AppDelegate: NSObject, NSApplicationDelegate {
     var window: NSWindow!
     let fileURL: URL
+    let timeout: TimeInterval?
+    let instanceStack = InstanceStack()
+    var timeoutTimer: Timer?
 
-    init(fileURL: URL) {
+    init(fileURL: URL, timeout: TimeInterval?) {
         self.fileURL = fileURL
+        self.timeout = timeout
         super.init()
     }
 
@@ -133,12 +177,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let windowWidth = thumbSize + 16
         let windowHeight = thumbSize + labelHeight + padding
 
-        // Position bottom-right of screen
+        // Determine stack position and offset vertically
+        let stackIndex = instanceStack.claim()
+        let stackOffset = CGFloat(stackIndex) * (windowHeight + 8)
+
+        // Position bottom-right of screen, stacked upward
         guard let screen = NSScreen.main else { return }
         let screenFrame = screen.visibleFrame
         let origin = NSPoint(
             x: screenFrame.maxX - windowWidth - 20,
-            y: screenFrame.minY + 20
+            y: screenFrame.minY + 20 + stackOffset
         )
 
         window = NSPanel(
@@ -179,17 +227,52 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             window.animator().setFrame(finalFrame, display: true)
             window.animator().alphaValue = 1
         }
+
+        // Start auto-dismiss timer if timeout was specified
+        if let timeout = timeout, timeout > 0 {
+            timeoutTimer = Timer.scheduledTimer(withTimeInterval: timeout, repeats: false) { _ in
+                NSApp.terminate(nil)
+            }
+        }
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        timeoutTimer?.invalidate()
+        instanceStack.release()
     }
 }
 
-// MARK: - Main
+// MARK: - Argument Parsing
 
-guard CommandLine.arguments.count > 1 else {
-    fputs("Usage: surface <file>\n", stderr)
+let args = CommandLine.arguments
+let isForeground = args.contains("--foreground")
+
+// Parse --timeout value
+var timeout: TimeInterval? = nil
+if let idx = args.firstIndex(of: "--timeout"), idx + 1 < args.count,
+   let seconds = TimeInterval(args[idx + 1]) {
+    timeout = seconds
+}
+
+// Collect positional arguments (skip flags and their values)
+var positional: [String] = []
+var i = 1
+while i < args.count {
+    if args[i] == "--foreground" {
+        i += 1
+    } else if args[i] == "--timeout" {
+        i += 2  // skip flag and its value
+    } else {
+        positional.append(args[i])
+        i += 1
+    }
+}
+
+guard let path = positional.first else {
+    fputs("Usage: surface <file> [--timeout <seconds>]\n", stderr)
     exit(1)
 }
 
-let path = CommandLine.arguments[1]
 let url: URL
 if path.hasPrefix("/") {
     url = URL(fileURLWithPath: path)
@@ -205,17 +288,20 @@ guard FileManager.default.fileExists(atPath: url.path) else {
 }
 
 // If launched with --foreground, run the app directly
-if CommandLine.arguments.contains("--foreground") {
+if isForeground {
     let app = NSApplication.shared
     app.setActivationPolicy(.accessory)
-    let delegate = AppDelegate(fileURL: url)
+    let delegate = AppDelegate(fileURL: url, timeout: timeout)
     app.delegate = delegate
     app.run()
 } else {
     // Re-launch ourselves in the background with --foreground
     let execPath = Bundle.main.executablePath ?? CommandLine.arguments[0]
-    let args = ["surface", url.path, "--foreground"]
-    var cArgs = args.map { strdup($0) } + [nil]
+    var spawnArgs = ["surface", url.path, "--foreground"]
+    if let timeout = timeout {
+        spawnArgs += ["--timeout", String(Int(timeout))]
+    }
+    var cArgs = spawnArgs.map { strdup($0) } + [nil]
     var pid: pid_t = 0
     let status = posix_spawn(&pid, execPath, nil, nil, &cArgs, nil)
     cArgs.compactMap { $0 }.forEach { free($0) }
