@@ -61,6 +61,25 @@ class DraggableFileView: NSView, NSDraggingSource {
         }
     }
 
+    // MARK: - Context Menu
+
+    override func menu(for event: NSEvent) -> NSMenu? {
+        let menu = NSMenu()
+        menu.addItem(withTitle: "Copy", action: #selector(copyFile), keyEquivalent: "c")
+        menu.addItem(withTitle: "Close", action: #selector(closeWindow), keyEquivalent: "w")
+        return menu
+    }
+
+    @objc func copyFile() {
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.writeObjects([fileURL as NSURL])
+    }
+
+    @objc func closeWindow() {
+        NSApp.terminate(nil)
+    }
+
     // MARK: - Open on double-click
 
     override func mouseDown(with event: NSEvent) {
