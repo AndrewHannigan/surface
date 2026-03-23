@@ -197,8 +197,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let windowHeight = thumbSize + labelHeight + padding
 
         // Determine stack position and offset vertically
+        let titleBarHeight: CGFloat = 22
         let stackIndex = instanceStack.claim()
-        let stackOffset = CGFloat(stackIndex) * (windowHeight + 8)
+        let stackOffset = CGFloat(stackIndex) * (windowHeight + titleBarHeight + 8)
 
         // Position bottom-right of screen, stacked upward
         guard let screen = NSScreen.main else { return }
@@ -287,46 +288,49 @@ while i < args.count {
     }
 }
 
-guard let path = positional.first else {
-    fputs("Usage: surface <file> [--timeout <seconds>]\n", stderr)
+guard !positional.isEmpty else {
+    fputs("Usage: surface <file>... [--timeout <seconds>]\n", stderr)
     exit(1)
 }
 
-let url: URL
-if path.hasPrefix("/") {
-    url = URL(fileURLWithPath: path)
-} else {
-    // Resolve relative path
-    let cwd = FileManager.default.currentDirectoryPath
-    url = URL(fileURLWithPath: cwd).appendingPathComponent(path)
+let cwd = FileManager.default.currentDirectoryPath
+var urls: [URL] = []
+for path in positional {
+    let url: URL
+    if path.hasPrefix("/") {
+        url = URL(fileURLWithPath: path)
+    } else {
+        url = URL(fileURLWithPath: cwd).appendingPathComponent(path)
+    }
+    guard FileManager.default.fileExists(atPath: url.path) else {
+        fputs("File not found: \(url.path)\n", stderr)
+        exit(1)
+    }
+    urls.append(url)
 }
 
-guard FileManager.default.fileExists(atPath: url.path) else {
-    fputs("File not found: \(url.path)\n", stderr)
-    exit(1)
-}
-
-// If launched with --foreground, run the app directly
+// If launched with --foreground, run the app directly (single file)
 if isForeground {
     let app = NSApplication.shared
     app.setActivationPolicy(.accessory)
-    let delegate = AppDelegate(fileURL: url, timeout: timeout)
+    let delegate = AppDelegate(fileURL: urls[0], timeout: timeout)
     app.delegate = delegate
     app.run()
 } else {
-    // Re-launch ourselves in the background with --foreground
+    // Spawn a background process per file
     let execPath = Bundle.main.executablePath ?? CommandLine.arguments[0]
-    var spawnArgs = ["surface", url.path, "--foreground"]
-    if let timeout = timeout {
-        spawnArgs += ["--timeout", String(Int(timeout))]
-    }
-    var cArgs = spawnArgs.map { strdup($0) } + [nil]
-    var pid: pid_t = 0
-    let status = posix_spawn(&pid, execPath, nil, nil, &cArgs, nil)
-    cArgs.compactMap { $0 }.forEach { free($0) }
-    if status != 0 {
-        fputs("Failed to launch background process\n", stderr)
-        exit(1)
+    for url in urls {
+        var spawnArgs = ["surface", url.path, "--foreground"]
+        if let timeout = timeout {
+            spawnArgs += ["--timeout", String(Int(timeout))]
+        }
+        var cArgs = spawnArgs.map { strdup($0) } + [nil]
+        var pid: pid_t = 0
+        let status = posix_spawn(&pid, execPath, nil, nil, &cArgs, nil)
+        cArgs.compactMap { $0 }.forEach { free($0) }
+        if status != 0 {
+            fputs("Failed to launch background process for: \(url.path)\n", stderr)
+        }
     }
     exit(0)
 }
